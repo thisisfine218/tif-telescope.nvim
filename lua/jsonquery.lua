@@ -1,52 +1,23 @@
 local M = {}
+local finders = require("telescope.finders")
+local pickers = require("telescope.pickers")
+local conf = require("telescope.config").values
+local action_state = require("telescope.actions.state")
+local actions = require("telescope.actions")
+local previewers = require("telescope.previewers")
 
-local function create_floating_window(opts)
-  opts = opts or {}
-  local width = opts.width or math.floor(vim.o.columns * 0.8)
-  local height = opts.height or math.floor(vim.o.lines * 0.8)
-  -- Calculate the position to center the window
-  local col = math.floor((vim.o.columns - width) / 2)
-  local row = math.floor((vim.o.lines - height) / 2)
-  -- Create a buffer
-  local buf = vim.api.nvim_create_buf(false, true) -- No file, scratch buffer
-  -- Define window configuration
-  local win_config = {
-    relative = "editor",
-    width = width,
-    height = height,
-    col = col,
-    row = row,
-    style = "minimal", -- No borders or extra UI elements
-    border = "rounded",
-  }
-  -- Create the floating window
-  local win = vim.api.nvim_open_win(buf, true, win_config)
-  return { buf = buf, win = win }
-end
+local current_file = ""
 
---- Run a jq query on the current buffer's content
---- @param query string: The jq query to run
---- @return string[]: The output of the jq command
 local function run_jq(query)
-  -- Get the current buffer's file path
-  local file_path = vim.fn.expand("%:p")
-  if file_path == "" then
-    file_path = "test.json"
-  end
-
-  if file_path == "" then
-    print("No file detected.")
+  if current_file == "" then
     return { "No file detected." }
   end
 
-  -- Construct the jq command
-  local cmd = string.format("jq '%s' '%s'", query, file_path)
+  local cmd = string.format("jq '%s' '%s' 2>&1", query, current_file)
 
-  -- Run the command and capture the output
   local handle = io.popen(cmd)
   if handle == nil then
-    print("Failed to run jq command.")
-    return { "Failed to run jq command." }
+    return { "Failed to run jq command.", cmd }
   end
 
   local result = handle:read("*a")
@@ -55,13 +26,109 @@ local function run_jq(query)
   return vim.split(result, "\n")
 end
 
-M.setup = function() end
+local function jq_previewer()
+  return previewers.new_buffer_previewer({
+    title = "JQ Query Result",
+    get_buffer_by_name = function()
+      return "JQ Result"
+    end,
+    define_preview = function(self, entry)
+      local results = run_jq(entry.value)
+      vim.api.nvim_buf_set_lines(self.state.bufnr, 0, -1, false, results)
+      -- Set buffer filetype to JSON for syntax highlighting
+      vim.api.nvim_buf_set_option(self.state.bufnr, "filetype", "json")
+    end,
+  })
+end
 
-M.query = function()
-  local query = vim.fn.input("Enter your query: ")
-  local win = create_floating_window()
-  local result = run_jq(query)
-  vim.api.nvim_buf_set_lines(win.buf, 0, -1, false, result)
+function M.query()
+  current_file = vim.fn.expand("%:p")
+  pickers.new({}, {
+    prompt_title = "JQ Query " .. current_file,
+    finder = finders.new_dynamic({
+      fn = function(prompt)
+        -- Return the prompt itself as the entry
+        if prompt and prompt ~= "" then
+          return { { value = prompt, display = prompt } }
+        else
+          return {}
+        end
+      end,
+      entry_maker = function(entry)
+        return {
+          value = entry.value,
+          display = entry.display,
+          ordinal = entry.display,
+        }
+      end,
+    }),
+    sorter = conf.generic_sorter({}),
+    previewer = jq_previewer(),
+    layout_config = {
+      height = 0.9,
+      preview_cutoff = 0,
+      prompt_position = "top",
+      preview_height = 0.9,
+    },
+    layout_strategy = "vertical",
+    attach_mappings = function(prompt_bufnr, map)
+      -- Open in vertical split with Ctrl+v
+      map("i", "<C-v>", function()
+        local selection = action_state.get_selected_entry()
+        if selection then
+          local results = run_jq(selection.value)
+          -- Create a new buffer for the results
+          local buf = vim.api.nvim_create_buf(false, true)
+          vim.api.nvim_buf_set_lines(buf, 0, -1, false, results)
+          -- Set buffer filetype to JSON
+          vim.api.nvim_buf_set_option(buf, "filetype", "json")
+          -- Close Telescope
+          actions.close(prompt_bufnr)
+          -- Switch to the new buffer
+          vim.cmd("vsplit")
+          vim.api.nvim_set_current_buf(buf)
+        end
+      end)
+      -- Open in horizontal split with Ctrl+s
+      map("i", "<C-s>", function()
+        local selection = action_state.get_selected_entry()
+        if selection then
+          local results = run_jq(selection.value)
+          -- Create a new buffer for the results
+          local buf = vim.api.nvim_create_buf(false, true)
+          vim.api.nvim_buf_set_lines(buf, 0, -1, false, results)
+          -- Set buffer filetype to JSON
+          vim.api.nvim_buf_set_option(buf, "filetype", "json")
+          -- Close Telescope
+          actions.close(prompt_bufnr)
+          -- Switch to the new buffer
+          vim.cmd("split")
+          vim.api.nvim_set_current_buf(buf)
+        end
+      end)
+      -- Apply the JQ query when Enter is pressed
+      actions.select_default:replace(function()
+        local selection = action_state.get_selected_entry()
+        if selection then
+          local results = run_jq(selection.value)
+          -- Create a new buffer for the results
+          local buf = vim.api.nvim_create_buf(false, true)
+          vim.api.nvim_buf_set_lines(buf, 0, -1, false, results)
+          -- Set buffer filetype to JSON
+          vim.api.nvim_buf_set_option(buf, "filetype", "json")
+          -- Close Telescope
+          actions.close(prompt_bufnr)
+          -- Switch to the new buffer
+          vim.api.nvim_set_current_buf(buf)
+        end
+      end)
+      return true
+    end,
+  }):find()
+end
+
+function M.setup()
+  -- Add any setup configuration here if needed
 end
 
 return M
