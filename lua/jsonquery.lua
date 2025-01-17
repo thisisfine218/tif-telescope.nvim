@@ -36,7 +36,7 @@ local function jq_previewer()
       local results = run_jq(entry.value)
       vim.api.nvim_buf_set_lines(self.state.bufnr, 0, -1, false, results)
       -- Set buffer filetype to JSON for syntax highlighting
-      vim.api.nvim_buf_set_option(self.state.bufnr, "filetype", "json")
+      vim.api.nvim_set_option_value("filetype", "json", { buf = self.state.bufnr })
     end,
   })
 end
@@ -81,7 +81,7 @@ function M.query()
           local buf = vim.api.nvim_create_buf(false, true)
           vim.api.nvim_buf_set_lines(buf, 0, -1, false, results)
           -- Set buffer filetype to JSON
-          vim.api.nvim_buf_set_option(buf, "filetype", "json")
+          vim.api.nvim_set_option_value("filetype", "json", { buf = buf })
           -- Close Telescope
           actions.close(prompt_bufnr)
           -- Switch to the new buffer
@@ -98,7 +98,7 @@ function M.query()
           local buf = vim.api.nvim_create_buf(false, true)
           vim.api.nvim_buf_set_lines(buf, 0, -1, false, results)
           -- Set buffer filetype to JSON
-          vim.api.nvim_buf_set_option(buf, "filetype", "json")
+          vim.api.nvim_set_option_value("filetype", "json", { buf = buf })
           -- Close Telescope
           actions.close(prompt_bufnr)
           -- Switch to the new buffer
@@ -115,7 +115,7 @@ function M.query()
           local buf = vim.api.nvim_create_buf(false, true)
           vim.api.nvim_buf_set_lines(buf, 0, -1, false, results)
           -- Set buffer filetype to JSON
-          vim.api.nvim_buf_set_option(buf, "filetype", "json")
+          vim.api.nvim_set_option_value("filetype", "json", { buf = buf })
           -- Close Telescope
           actions.close(prompt_bufnr)
           -- Switch to the new buffer
