@@ -9,7 +9,10 @@ local function run_cheat(query)
   -- -s: silent mode
   -- -L: follow redirects
   -- T: disable terminal capabilities reporting
-  local cmd = string.format("curl -sL 'https://cht.sh/%s?T'", query:gsub(" ", "+"))
+  local cmd = "curl -sL 'https://cht.sh/?T'"
+  if query ~= "" then
+    cmd = string.format("curl -sL 'https://cht.sh/%s?T'", query:gsub(" ", "+"))
+  end
   local handle = io.popen(cmd)
   if handle == nil then
     return { "Failed to run jq command.", cmd }
@@ -44,7 +47,7 @@ function M.query()
       local results = run_cheat(query)
       vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, results)
     end
-  end, 180)
+  end, 200)
 
   pickers.new({}, {
     prompt_title = "Cheat.sh Query",
@@ -52,9 +55,8 @@ function M.query()
       fn = function(prompt)
         if prompt and prompt ~= "" then
           return { { value = prompt } }
-        else
-          return {}
         end
+        return { { value = "" } }
       end,
       entry_maker = function(entry)
         return {
@@ -67,10 +69,18 @@ function M.query()
     previewer = previewers.new_buffer_previewer({
       title = "Cheat.sh Result",
       define_preview = function(self, entry)
+        if not previewer_state.bufnr then
+          local initial_results = run_cheat("")
+          vim.api.nvim_buf_set_lines(self.state.bufnr, 0, -1, false, initial_results)
+        end
+
         previewer_state.bufnr = self.state.bufnr
         previewer_state.latest_query = entry.value
-        vim.api.nvim_set_option_value("filetype", "markdown", { buf = self.state.bufnr })
-        update_preview(self.state.bufnr, entry.value)
+        vim.api.nvim_set_option_value("filetype", "bash", { buf = self.state.bufnr })
+
+        if entry.value ~= "" then
+          update_preview(self.state.bufnr, entry.value)
+        end
       end,
     }),
     layout_config = {
